@@ -9,7 +9,7 @@ quantize = True #@param {type:"boolean"}
 options = vision.ImageEmbedderOptions(
     base_options=base_options, l2_normalize=l2_normalize, quantize=quantize)
 
-IMAGE_FILENAMES = ["E:/Image_Analyzer/The_Yard_Burger.jpg", "E:/Image_Analyzer/The_Yard_Burger_Finished.jpg"]
+IMAGE_FILENAMES = ["E:/Image_Analyzer/Images/The_Yard_Burger.jpg", "E:/Image_Analyzer/Images/The_Yard_Burger_Finished.jpg"]
 
 # Create Image Embedder
 with vision.ImageEmbedder.create_from_options(options) as embedder:

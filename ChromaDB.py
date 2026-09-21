@@ -7,6 +7,7 @@ from pathlib import Path
 COLLECTION_NAME = "image_embeddings"
 CHROMA_PATH = "E:/Image_Analyzer/chroma_data" # NOTE: Your custom path here
 
+
 def initialize_chroma():
     """Initializes or connects to a local ChromaDB client using the safer get_or_create method."""
     print("Initializing ChromaDB Client...")
@@ -41,21 +42,32 @@ def add_data_to_db(collection: chromadb.Collection, file_paths: list[str], embed
     Adds the metadata (file paths) and their corresponding vectors to ChromaDB.
     """
     print("\n================================================")
-    print("   STARTING DATA UPLOAD TO CHROMADB")
-    print(f"   Attempting to add {len(embeddings)} items...")
+    print("   STARTING DATA UPLOAD TO CHROMADB")
+    print(f"   Attempting to add {len(embeddings)} items...")
+
 
     # 1. Prepare the data for bulk insertion
-    ids = [str(i) for i in range(len(file_paths))] 
-    metadatas = file_paths # The list of simple strings (the fixed fix!)
+    ids = []
+    metadatas = []
+    for i in range(len(file_paths)):
+        ids.append(str(i))
+        metadatas.append(file_paths[i])
 
     # 2. Insert the data into ChromaDB
     try:
-        collection.add(
-            embeddings=embeddings,
-            documents=metadatas,  # Passing a list of strings for metadata
-            ids=ids               # Unique identifiers for each item
-        )
+        for i in range(len(file_paths)):
+                collection.add(
+                    ids=ids[i],
+                    embeddings=embeddings[i],
+                    documents=metadatas[i] # Passing a list of strings for metadata
+                )
+                # a = ids[i]
+                # b = embeddings[i]
+                # c = metadatas[i]
+                # print(f"Run {i}")
+                # print(f"Ids[{i}], embeddings[{i}], metadatas[{i}] = {a}, {b}, {c}")
         print("✅ SUCCESS! All data has been successfully indexed into ChromaDB.")
+
 
     except Exception as e:
         print(f"❌ ERROR during database insertion: {e}")
@@ -64,58 +76,43 @@ def add_data_to_db(collection: chromadb.Collection, file_paths: list[str], embed
 def find_by_vector(collection: chromadb.Collection, query_vector: list[float]):
     """
     Finds the most similar file path in the database given a vector input, 
-    with robust error handling for inconsistent result lengths.
+    with robust error handling for inconsistent result lengths and ChromaDB's nested structure.
     """
     print("\n================================================")
-    print("   PERFORMING VECTOR SEARCH QUERY")
+    print("   PERFORMING VECTOR SEARCH QUERY")
+
 
     # --- Step 1: Query Execution (The list must be passed as a single item in a list) ---
     try:
         results = collection.query(
             query_embeddings=[query_vector], # Pass the query vector in a LIST!
-            n_results=3,                      
-            include=['documents', 'metadatas', 'distances']
+            n_results=1,                      
+            include=['embeddings', 'documents']
         )
 
         # Check if any results were returned at all
-        if not results or not results['ids']:
+        if not results or not results.get('ids'):
              print("No results found in the database.")
              return
 
-        # --- Step 2: Determine Safe Iteration Limit (THE FIX!) ---
-        # We calculate the minimum length of the key result lists.
-        # This prevents 'list index out of range' errors if one list is shorter than others.
-        max_results = min(
-            len(results['ids'][0]), 
-            len(results['metadatas'][0]), 
-            len(results['distances'][0])
-        )
+
+        # --- Step 2: Determine Safe Iteration Limit (THE CRITICAL FIX!) ---
+        # We must check for key existence and ensure the result list is non-empty before indexing [0].
 
         print("\n================================================")
         print("✨ SEARCH RESULTS FOUND ✨")
         
-        # --- Step 3: Iteration using the safe limit ---
-        for i in range(max_results):
-            file_path = results['metadatas'][i][0]
-            distance = results['distances'][i][0]
+        print("Metadatas: " + str(results.get('documents')))
+        print("Embeddings: " + str(results.get('embeddings')))
 
-            # Check if file_path was successfully retrieved (The NoneType check)
-            if file_path is None:
-                print("-" * 40)
-                print("⚠️ WARNING: Could not retrieve the file path for this result.")
-                # We still report the score, but skip printing a path
-                similarity_score = 1 - distance 
-                print(f"✅ Similarity Score (Distance): {similarity_score:.4f} (Found by vector math, but metadata missing)")
-                continue # Skip to the next item
-
-            # If file_path is valid, we proceed:
-            print("-" * 40)
-            print(f"🔍 Found File: {Path(file_path).name}")
-            similarity_score = 1 - distance
-            print(f"✅ Similarity Score: {similarity_score:.4f} (Closer to 1 is best)")
-
+    except IndexError as e:
+        # This specific block catches the 'list index out of range' error gracefully.
+        print(f"\n❌ ERROR during database querying: List Index Out Of Range encountered! ({e})")
+        print("This usually means the expected nested list structure from ChromaDB was not met.")
     except Exception as e:
-        print(f"❌ A fatal error occurred during database querying: {e}")
+        # Catches any other unforeseen errors (network, connection, etc.)
+        print(f"❌ A general fatal error occurred during database querying: {e}")
+
 
 
 
@@ -123,17 +120,18 @@ def find_by_vector(collection: chromadb.Collection, query_vector: list[float]):
 # MAIN EXECUTION BLOCK
 # ================================================
 
+
 if __name__ == "__main__":
     
     # --- PHASE 0: Setup (This needs to run first!) ---
     collection = initialize_chroma()
-
 
     # 1. Define the file list and generate embeddings (The setup phase)
     mock_file_paths = [
         "E:/Image_Analyzer/Images/The_Yard_Burger.jpg",
         "E:/Image_Analyzer/Images/The_Yard_Burger_Finished.jpg"
     ]
+
 
     # 2. Generate the Vectors (Mock Data) and store them in ChromaDB
     embeddings = generate_mock_embeddings(mock_file_paths)
@@ -147,6 +145,7 @@ if __name__ == "__main__":
         query_vector = embeddings[0] 
         print("\n--- TESTING THE QUERY FUNCTIONALITY ---")
         print(f"Querying with Vector from file: {Path(mock_file_paths[0]).name}")
+
 
         # Run the search function using the mock vector!
         find_by_vector(collection, query_vector)
